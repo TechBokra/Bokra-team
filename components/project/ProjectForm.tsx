@@ -33,6 +33,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     budgetHours: undefined,
     budgetAmount: undefined,
     deadline: "",
+    autoApproveTasks: false,
   });
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -46,6 +47,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         budgetHours: project.budgetHours,
         budgetAmount: project.budgetAmount,
         deadline: project.deadline ? project.deadline.split("T")[0] : "",
+        autoApproveTasks: project.autoApproveTasks || false,
       });
     } else {
       setFormData({
@@ -55,6 +57,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         budgetHours: undefined,
         budgetAmount: undefined,
         deadline: "",
+        autoApproveTasks: false,
       });
     }
   }, [project]);
@@ -217,6 +220,24 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
                 className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm"
               />
             </div>
+          </div>
+
+          <div className="mt-6 flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="autoApproveTasks"
+              checked={formData.autoApproveTasks || false}
+              onChange={(e) =>
+                setFormData({ ...formData, autoApproveTasks: e.target.checked })
+              }
+              className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500"
+            />
+            <label
+              htmlFor="autoApproveTasks"
+              className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+            >
+              الاعتماد التلقائي للمهام فور انتهائها (لكافة مهام المشروع)
+            </label>
           </div>
 
           <div className="flex justify-start space-x-3 rtl:space-x-reverse pt-6 mt-6 border-t dark:border-slate-800">

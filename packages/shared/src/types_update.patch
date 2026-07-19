@@ -1,0 +1,54 @@
+--- packages/shared/src/types.ts
++++ packages/shared/src/types.ts
+@@ -100,6 +100,7 @@
+   emergency_contact_phone?: string;
+   national_id?: string;
+   social_insurance_number?: string;
++  autoApproveTasks?: boolean;
+ }
+ 
+ export interface TeamMemberFormData {
+@@ -156,6 +157,7 @@
+   creatorId: number;
+   freelancerContract?: FreelancerContract;
+   budgetNotificationSent?: number;
++  autoApproveTasks?: boolean;
+   members?: ProjectMember[];
+ }
+ 
+@@ -171,6 +173,19 @@
+   | "rejected"
+   | "needs-adjustment";
+ 
++export interface TaskGroup {
++  id: string;
++  projectId: string;
++  name: string;
++  description?: string;
++}
++
++export interface TaskGroupMember {
++  id: string;
++  taskGroupId: string;
++  teamMemberId: number;
++  role: "Manager" | "Member";
++}
+ 
+ export interface Task {
+   id: string;
+@@ -183,6 +198,8 @@
+   dueDate?: string;
+   approvalStatus: ApprovalStatus;
+   approvalNotes?: string;
++  taskGroupId?: string;
++  autoApprove?: boolean;
+ }
+ 
+ export interface TaskFormData {
+@@ -192,6 +209,8 @@
+   assignedTo?: number;
+   status: TaskStatus;
+   dueDate?: string;
++  taskGroupId?: string;
++  autoApprove?: boolean;
+ }

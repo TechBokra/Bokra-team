@@ -89,6 +89,7 @@ export interface TeamMember {
   email: string;
   authUserId: string;
   roleId: string;
+  roleName?: string;
   reportsTo?: number | null;
   avatarUrl: string;
   employmentType: EmploymentType;
@@ -97,6 +98,7 @@ export interface TeamMember {
   weeklyHoursRequirement?: number | null;
   daysOff: string[];
   weeklyPlan: WeeklyPlan;
+  autoApproveTasks?: boolean;
 }
 
 export interface TeamMemberFormData {
@@ -111,6 +113,7 @@ export interface TeamMemberFormData {
   hourlyRate?: number;
   weeklyHoursRequirement?: number;
   daysOff: string[];
+  autoApproveTasks?: boolean;
 }
 
 // --- PROJECTS & TASKS ---
@@ -135,6 +138,7 @@ export interface ProjectFormData {
   budgetHours?: number;
   budgetAmount?: number;
   deadline?: string;
+  autoApproveTasks?: boolean;
 }
 
 export type ProjectRole = "Manager" | "Member";
@@ -156,6 +160,7 @@ export interface Project {
   freelancerContract?: FreelancerContract;
   budgetNotificationSent?: number;
   members?: ProjectMember[];
+  autoApproveTasks?: boolean;
 }
 
 export interface BillingProposalFormData {
@@ -171,6 +176,20 @@ export type ApprovalStatus =
   | "rejected"
   | "needs-adjustment";
 
+export interface TaskGroup {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+}
+
+export interface TaskGroupMember {
+  id: string;
+  taskGroupId: string;
+  teamMemberId: number;
+  role: "Manager" | "Member";
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -182,6 +201,8 @@ export interface Task {
   dueDate?: string;
   approvalStatus: ApprovalStatus;
   approvalNotes?: string;
+  taskGroupId?: string;
+  autoApprove?: boolean;
 }
 
 export interface TaskFormData {
@@ -191,10 +212,13 @@ export interface TaskFormData {
   assignedTo?: number;
   status: TaskStatus;
   dueDate?: string;
+  taskGroupId?: string;
+  autoApprove?: boolean;
 }
 
 export interface SuggestedTask {
   title: string;
+  description?: string;
   suggestedRole: "employee" | "manager" | "freelancer" | "any";
 }
 
@@ -224,6 +248,7 @@ export interface DailyLog {
   date: string; // YYYY-MM-DD
   hours: number;
   description: string;
+  createdAt?: string;
 }
 
 export interface DailyLogFormData {

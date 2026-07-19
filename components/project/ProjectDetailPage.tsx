@@ -12,6 +12,7 @@ import { ProjectMembers } from "./ProjectMembers";
 import { ProjectForm } from "./ProjectForm";
 import { BulkAddTasksModal } from "../tasks/BulkAddTasksModal";
 import { GanttChart } from "./GanttChart";
+import { ProjectTaskGroups } from "./ProjectTaskGroups";
 import { PencilIcon, TrashIcon, ArrowLeftIcon, PlusIcon, ListBulletIcon, Squares2X2Icon } from "../ui/Icons";
 import { StatusBadge } from "../ui/StatusBadge";
 import { useNavigation } from "@shared/contexts/NavigationContext";
@@ -57,7 +58,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"kanban" | "gantt" | "members">("kanban");
+  const [activeTab, setActiveTab] = useState<"kanban" | "gantt" | "members" | "task_groups">("kanban");
   const [taskViewMode, setTaskViewMode] = useState<"kanban" | "list">("kanban");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
 
@@ -298,6 +299,16 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({
           >
             أعضاء المشروع
           </button>
+          <button
+            onClick={() => setActiveTab("task_groups")}
+            className={`py-2 px-6 text-sm font-medium rounded-lg transition-all ${
+              activeTab === "task_groups"
+                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            }`}
+          >
+            مجموعات المهام
+          </button>
         </div>
 
         {activeTab === "kanban" && (
@@ -392,6 +403,15 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({
             <ProjectMembers
               project={project}
               canManageMembers={canManageMembers}
+            />
+          </div>
+        )}
+
+        {activeTab === "task_groups" && (
+          <div className="h-full max-w-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <ProjectTaskGroups
+              project={project}
+              canManage={canEditProjectSettings}
             />
           </div>
         )}

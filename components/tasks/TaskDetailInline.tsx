@@ -6,6 +6,7 @@ import {
   TeamMember,
   TaskStatus,
   Project,
+  TaskGroup,
 } from "@shared/types";
 import { useTeamContext } from "@shared/contexts/TeamContext";
 import { useProjectContext } from "@shared/contexts/ProjectContext";
@@ -271,6 +272,8 @@ interface TaskDetailEditProps {
     assignedTo: string;
     dueDate: string;
     status: TaskStatus;
+    autoApprove?: boolean;
+    taskGroupId?: string;
   };
   setFormData: React.Dispatch<
     React.SetStateAction<TaskDetailEditProps["formData"]>
@@ -283,6 +286,7 @@ interface TaskDetailEditProps {
   canAssignToOthers: boolean;
   isNew: boolean;
   isProjectFixed?: boolean;
+  taskGroups?: TaskGroup[];
 }
 
 const TaskDetailEdit: React.FC<TaskDetailEditProps> = ({
@@ -296,6 +300,7 @@ const TaskDetailEdit: React.FC<TaskDetailEditProps> = ({
   canAssignToOthers,
   isNew,
   isProjectFixed,
+  taskGroups = [],
 }) => (
   <form onSubmit={handleFormSubmit} className="flex-1 pr-2 space-y-6 mt-4">
     <div>
@@ -343,6 +348,29 @@ const TaskDetailEdit: React.FC<TaskDetailEditProps> = ({
         ))}
       </select>
     </div>
+    
+    {formData.projectId && taskGroups.length > 0 && (
+      <div>
+        <label className="block text-sm font-medium mb-1 dark:text-slate-300">
+          مجموعة المهام (مرحلة العمل)
+        </label>
+        <select
+          value={formData.taskGroupId || ""}
+          onChange={(e) =>
+            setFormData({ ...formData, taskGroupId: e.target.value })
+          }
+          className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm dark:bg-slate-900"
+        >
+          <option value="">-- عام --</option>
+          {taskGroups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    )}
+
     <div className="grid grid-cols-2 gap-4">
       <div>
         <label className="block text-sm font-medium mb-1 dark:text-slate-300">
@@ -395,6 +423,25 @@ const TaskDetailEdit: React.FC<TaskDetailEditProps> = ({
         <option value="done">مكتملة</option>
       </select>
     </div>
+    
+    <div className="flex items-center gap-3">
+      <input
+        type="checkbox"
+        id="autoApprove"
+        checked={formData.autoApprove || false}
+        onChange={(e) =>
+          setFormData({ ...formData, autoApprove: e.target.checked })
+        }
+        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+      />
+      <label
+        htmlFor="autoApprove"
+        className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+      >
+        اعتماد تلقائي (لا تحتاج إلى مراجعة عند اكتمالها)
+      </label>
+    </div>
+
     <div className="flex justify-start space-x-2 rtl:space-x-reverse pt-4 border-t dark:border-slate-800">
       <button
         type="submit"
@@ -432,6 +479,7 @@ export const TaskDetailInline: React.FC<TaskDetailInlineProps> = ({
     handleAddTaskAttachment,
     handleDeleteTaskAttachment,
     handleDeleteTaskComment,
+    projects,
   } = useProjectContext();
   const { currentUser } = useAuth();
   const { supabaseClient } = useSupabase();
@@ -467,11 +515,6 @@ export const TaskDetailInline: React.FC<TaskDetailInlineProps> = ({
     }
   };
 
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ["projects_list"],
-    queryFn: () => api.getAll(supabaseClient!, "projects", "id, name"),
-    enabled: !!supabaseClient,
-  });
 
   const isNew = !task;
   const [isEditing, setIsEditing] = useState(isNew || initialMode === "edit");
@@ -482,6 +525,8 @@ export const TaskDetailInline: React.FC<TaskDetailInlineProps> = ({
     assignedTo: task?.assignedTo?.toString() || "",
     dueDate: task?.dueDate ? format(parseISO(task.dueDate), "yyyy-MM-dd") : "",
     status: task?.status || ("todo" as TaskStatus),
+    autoApprove: task?.autoApprove || false,
+    taskGroupId: task?.taskGroupId || "",
   });
 
   const targetProjectId = formData.projectId || task?.projectId || projectId;
@@ -497,6 +542,20 @@ export const TaskDetailInline: React.FC<TaskDetailInlineProps> = ({
         .single();
       if (error) throw error;
       return api.keysToCamel(data) as Project;
+    },
+    enabled: !!supabaseClient && !!targetProjectId,
+  });
+
+  const { data: taskGroups = [] } = useQuery<TaskGroup[]>({
+    queryKey: ["task_groups", targetProjectId],
+    queryFn: async () => {
+      if (!supabaseClient || !targetProjectId) return [];
+      const { data, error } = await supabaseClient
+        .from("task_groups")
+        .select("*")
+        .eq("project_id", targetProjectId);
+      if (error) throw error;
+      return api.keysToCamel(data) as TaskGroup[];
     },
     enabled: !!supabaseClient && !!targetProjectId,
   });
@@ -570,6 +629,8 @@ export const TaskDetailInline: React.FC<TaskDetailInlineProps> = ({
         assignedTo: initialAssignee,
         dueDate: "",
         status: "todo",
+        autoApprove: false,
+        taskGroupId: "",
       });
     } else if (task) {
       setFormData({
@@ -581,6 +642,8 @@ export const TaskDetailInline: React.FC<TaskDetailInlineProps> = ({
           ? format(parseISO(task.dueDate), "yyyy-MM-dd")
           : "",
         status: task.status,
+        autoApprove: task.autoApprove || false,
+        taskGroupId: task.taskGroupId || "",
       });
     }
   }, [task?.id, initialMode, projectId, currentUser]);
@@ -760,6 +823,7 @@ export const TaskDetailInline: React.FC<TaskDetailInlineProps> = ({
               canAssignToOthers={canAssignToOthers}
               isNew={isNew}
               isProjectFixed={isProjectFixed}
+              taskGroups={taskGroups}
             />
           ) : task ? (
             <TaskDetailView

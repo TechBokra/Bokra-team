@@ -14,6 +14,7 @@ import {
   ProjectFormData,
   SuggestedTask,
   TeamMember,
+  ApprovalStatus,
 } from "../types";
 import { useSupabase } from "./SupabaseContext";
 import { useAuth } from "./AuthContext";
@@ -25,6 +26,7 @@ import { useTaskComments } from "../hooks/useTaskComments";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export interface ProjectContextType {
+  projects: Project[];
   handleAddTask: (
     taskData: Omit<Task, "id" | "approvalStatus" | "creatorId">,
     projectId?: string,
@@ -60,6 +62,29 @@ export const useProject = (): ProjectContextType => {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
   const { teamMembers } = useTeamContext();
+
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ["projects"],
+    queryFn: async () => {
+      if (!supabaseClient) return [];
+      const res = await supabaseClient.from("projects").select("*");
+      return res.data ? (api.keysToCamel(res.data) as Project[]) : [];
+    },
+    enabled: !!supabaseClient,
+  });
+
+  const isTaskAutoApproved = (taskData: any) => {
+    if (taskData.autoApprove) return true;
+    if (taskData.projectId) {
+      const p = projects.find((proj) => proj.id === taskData.projectId);
+      if (p?.autoApproveTasks) return true;
+    }
+    if (taskData.assignedTo) {
+      const u = teamMembers.find((m) => m.id === Number(taskData.assignedTo));
+      if (u?.autoApproveTasks) return true;
+    }
+    return false;
+  };
 
   // Queries for attachments and comments
   const { data: initialAttachments = EMPTY_ATTACHMENTS } = useQuery({
@@ -106,10 +131,20 @@ export const useProject = (): ProjectContextType => {
   ) => {
     if (!supabaseClient || !currentUser) return;
     try {
+      const pId = projectId || taskData.projectId;
+      const autoApprove = isTaskAutoApproved({ ...taskData, projectId: pId });
+      
+      let approvalStatus: ApprovalStatus = "approved"; // Default for new tasks
+      if (taskData.status === "done" && !autoApprove) {
+         approvalStatus = "pending";
+      } else if (taskData.status === "done" && autoApprove) {
+         approvalStatus = "approved";
+      }
+
       const snakeData = api.camelToSnakeCase({
         ...taskData,
-        projectId: projectId || taskData.projectId,
-        approvalStatus: "approved", // auto approve
+        projectId: pId,
+        approvalStatus: approvalStatus,
         creatorId: currentUser.id,
       });
       await api.insert(supabaseClient, "tasks", snakeData);
@@ -126,6 +161,16 @@ export const useProject = (): ProjectContextType => {
   ) => {
     if (!supabaseClient) return;
     try {
+      // If task is transitioning to "done", check auto approve
+      if (taskData.status === "done") {
+         const autoApprove = isTaskAutoApproved(taskData);
+         if (!autoApprove && taskData.approvalStatus !== "approved") {
+            taskData.approvalStatus = "pending";
+         } else if (autoApprove) {
+            taskData.approvalStatus = "approved";
+         }
+      }
+
       const snakeData = api.camelToSnakeCase(taskData);
       await api.update(supabaseClient, "tasks", taskData.id, snakeData);
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -217,6 +262,7 @@ export const useProject = (): ProjectContextType => {
   };
 
   return {
+    projects,
     handleAddTask,
     handleUpdateTask,
     handleDeleteTask,

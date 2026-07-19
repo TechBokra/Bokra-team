@@ -46,6 +46,7 @@ export const TeamMemberForm: React.FC<TeamMemberFormProps> = ({
     hourlyRate: undefined,
     weeklyHoursRequirement: undefined,
     daysOff: [],
+    autoApproveTasks: false,
   });
 
   const isEditing = !!member;
@@ -66,6 +67,7 @@ export const TeamMemberForm: React.FC<TeamMemberFormProps> = ({
         hourlyRate: member.hourlyRate || undefined,
         weeklyHoursRequirement: member.weeklyHoursRequirement || undefined,
         daysOff: member.daysOff || [],
+        autoApproveTasks: member.autoApproveTasks || false,
       });
     } else {
       setFormData({
@@ -80,6 +82,7 @@ export const TeamMemberForm: React.FC<TeamMemberFormProps> = ({
         hourlyRate: undefined,
         weeklyHoursRequirement: undefined,
         daysOff: [],
+        autoApproveTasks: false,
       });
     }
   }, [member, roles]);
@@ -316,6 +319,24 @@ export const TeamMemberForm: React.FC<TeamMemberFormProps> = ({
               />
             </div>
           )}
+        </div>
+
+        <div className="mt-4 flex items-center gap-3 md:col-span-2">
+          <input
+            type="checkbox"
+            id="autoApproveTasks"
+            checked={formData.autoApproveTasks || false}
+            onChange={(e) =>
+              setFormData({ ...formData, autoApproveTasks: e.target.checked })
+            }
+            className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+          />
+          <label
+            htmlFor="autoApproveTasks"
+            className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+          >
+            الاعتماد التلقائي لكافة المهام الموكلة لهذا العضو فور انتهائه منها
+          </label>
         </div>
 
         <div className="flex justify-start space-x-3 rtl:space-x-reverse pt-6 mt-6 border-t dark:border-slate-800">

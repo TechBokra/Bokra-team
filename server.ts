@@ -209,7 +209,7 @@ async function startServer() {
         error,
       } = await supabaseAdmin.auth.getUser(token);
 
-      if (error || !user) {
+      if (error || !user) { console.error("verifyToken auth.getUser error:", error, "user:", user);
         res.status(401).json({ error: "Unauthorized: Invalid token" });
         return;
       }
@@ -308,7 +308,7 @@ async function startServer() {
     try {
       const validation = validate(MemberUpdateSchema, req.body);
       if (!validation.success) {
-        return res.status(400).json({ error: validation.error });
+        return res.status(400).json({ error: (validation as any).error });
       }
       const { memberId, updates } = validation.data;
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -493,8 +493,8 @@ async function startServer() {
         entityId: memberId.toString(),
         oldValues: oldValuesLog,
         newValues: newValuesLog,
-        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress,
-        userAgent: req.headers['user-agent'],
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''),
+        userAgent: req.headers['user-agent'] as string,
       });
 
       res.status(200).json({ success: true });
@@ -577,7 +577,7 @@ async function startServer() {
     try {
       const validation = validate(MemberCreateSchema, req.body.memberData);
       if (!validation.success) {
-        return res.status(400).json({ error: validation.error });
+        return res.status(400).json({ error: (validation as any).error });
       }
       const { email, password, ...restOfData } = validation.data;
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -664,8 +664,8 @@ async function startServer() {
         entityType: 'member',
         entityId: insertedMember?.id?.toString(),
         newValues: insertedMemberLog,
-        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress,
-        userAgent: req.headers['user-agent'],
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''),
+        userAgent: req.headers['user-agent'] as string,
       });
 
       res.status(200).json({ success: true, member: insertedMember });
@@ -1137,7 +1137,7 @@ async function startServer() {
     try {
       const validation = validate(InviteAcceptSchema, req.body);
       if (!validation.success) {
-        return res.status(400).json({ error: validation.error });
+        return res.status(400).json({ error: (validation as any).error });
       }
       const { token, name, password } = validation.data;
 
@@ -1235,7 +1235,7 @@ async function startServer() {
     try {
       const validation = validate(InviteCreateSchema, req.body);
       if (!validation.success) {
-        return res.status(400).json({ error: validation.error });
+        return res.status(400).json({ error: (validation as any).error });
       }
       const { email, roleId } = validation.data;
 
@@ -1299,8 +1299,8 @@ async function startServer() {
         entityType: 'invite',
         entityId: invite.id,
         newValues: invite,
-        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress,
-        userAgent: req.headers['user-agent'],
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''),
+        userAgent: req.headers['user-agent'] as string,
       });
 
       res.status(200).json({ success: true, invite });
@@ -1336,9 +1336,9 @@ async function startServer() {
         actorEmail: adminEmail,
         action: 'invite_revoked',
         entityType: 'invite',
-        entityId: id,
-        ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress,
-        userAgent: req.headers['user-agent'],
+        entityId: id as string,
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''),
+        userAgent: req.headers['user-agent'] as string,
       });
 
       const { error } = await supabaseAdmin
@@ -1578,6 +1578,52 @@ async function startServer() {
       res.status(200).json({ success: true });
     } catch (err: any) {
       console.error("Delete attachment proxy error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/task_groups", verifyToken, async (req, res) => {
+    try {
+      const { projectId, name, description } = req.body;
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });
+      const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+      const { data, error } = await supabaseAdmin.from("task_groups").insert([{ project_id: projectId, name, description }]).select().single();
+      if (error) throw error;
+      res.status(201).json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/task_groups/:id", verifyToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, description } = req.body;
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });
+      const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+      const { data, error } = await supabaseAdmin.from("task_groups").update({ name, description }).eq("id", id).select().single();
+      if (error) throw error;
+      res.status(200).json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/task_groups/:id", verifyToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });
+      const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+      const { error } = await supabaseAdmin.from("task_groups").delete().eq("id", id);
+      if (error) throw error;
+      res.status(200).json({ success: true });
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });

@@ -1,0 +1,1 @@
+sed -i "s/ipAddress: (req.ip || req.headers\['x-forwarded-for'\] || req.socket.remoteAddress) as string,/ipAddress: (req.ip || (Array.isArray(req.headers['x-forwarded-for']) ? req.headers['x-forwarded-for'][0] : req.headers['x-forwarded-for']) || req.socket.remoteAddress || '') as string,/g" server.ts
