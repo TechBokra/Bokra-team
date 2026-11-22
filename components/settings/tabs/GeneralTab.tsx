@@ -106,10 +106,6 @@ export const GeneralTab: React.FC<Props> = ({ settings, handleInputChange, setSe
             </span>
           </button>
         </div>
-        <p className="text-xs text-slate-500 mt-2">
-          ملاحظة: يتطلب رفع الملفات إعداد مخزن (bucket) باسم
-          `site_assets` في Supabase.
-        </p>
       </div>
     </div>
   );

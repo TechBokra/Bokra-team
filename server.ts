@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import rateLimit from "express-rate-limit";
 import { createClient } from "./server/compat.js";
-import { registerBokraRoutes } from "./server/routes.js";
+import { registerBokraRoutes, canManageProject } from "./server/routes.js";
 import dotenv from "dotenv";
 import { z } from "zod";
 
@@ -66,6 +66,10 @@ export async function buildApp(mode: "node" | "serverless" = "node") {
       return path.startsWith("/api/invite") ||
              path.startsWith("/api/admin") ||
              path.startsWith("/api/team") ||
+             path.startsWith("/api/task_comments") ||
+             path.startsWith("/api/task_attachments") ||
+             path.startsWith("/api/task_groups") ||
+             path.startsWith("/api/notifications") ||
              path.startsWith("/api/keep-alive");
     }
   });
@@ -92,12 +96,13 @@ export async function buildApp(mode: "node" | "serverless" = "node") {
   app.use("/api/invite", limiterInvite); // يشمل /verify و /accept
   app.use("/api/admin", limiterAdmin); // يشمل كل /api/admin/*
   app.use("/api/team", limiterAdmin); // يشمل كل /api/team/*
+  app.use(["/api/task_comments", "/api/task_attachments", "/api/task_groups", "/api/notifications"], limiterAdmin);
   app.use("/api", limiterPublic); // fallback لباقي الـ endpoints
 
   // --- INPUT VALIDATION SCHEMAS & HELPERS (Zod) ---
 
   const InviteAcceptSchema = z.object({
-    token: z.string().uuid("رابط الدعوة غير صالح"),
+    token: z.string().regex(/^[a-f0-9]{64}$/, "رابط الدعوة غير صالح"),
     name: z.string().min(2, "الاسم يجب أن يكون حرفين على الأقل").max(100),
     password: z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").max(128),
   });
@@ -1588,6 +1593,7 @@ export async function buildApp(mode: "node" | "serverless" = "node") {
   app.post("/api/task_groups", verifyToken, async (req, res) => {
     try {
       const { projectId, name, description } = req.body;
+      if (!(await canManageProject(req.headers.authorization, projectId))) return res.status(403).json({ error: "لا تملك صلاحية إدارة مجموعات المهام في هذا المشروع" });
       const supabaseUrl = process.env.DATABASE_URL;
       const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });
@@ -1604,6 +1610,8 @@ export async function buildApp(mode: "node" | "serverless" = "node") {
     try {
       const { id } = req.params;
       const { name, description } = req.body;
+      const groupProject = (await createClient().from("task_groups").select("project_id").eq("id", id).maybeSingle()).data as any;
+      if (!(await canManageProject(req.headers.authorization, groupProject?.project_id))) return res.status(403).json({ error: "لا تملك صلاحية إدارة مجموعات المهام في هذا المشروع" });
       const supabaseUrl = process.env.DATABASE_URL;
       const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });
@@ -1619,6 +1627,8 @@ export async function buildApp(mode: "node" | "serverless" = "node") {
   app.delete("/api/task_groups/:id", verifyToken, async (req, res) => {
     try {
       const { id } = req.params;
+      const groupProject = (await createClient().from("task_groups").select("project_id").eq("id", id).maybeSingle()).data as any;
+      if (!(await canManageProject(req.headers.authorization, groupProject?.project_id))) return res.status(403).json({ error: "لا تملك صلاحية إدارة مجموعات المهام في هذا المشروع" });
       const supabaseUrl = process.env.DATABASE_URL;
       const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });

@@ -123,10 +123,11 @@ function buildSelectList(s: SchemaCache, table: string, alias: string, columns: 
   const parts = splitTop(columns || "*");
   const sql: string[] = [];
   for (const part of parts) {
-    const m = part.match(/^([a-z_][a-z0-9_]*)\s*\((.*)\)$/i);
+    const m = part.match(/^(?:([a-z_][a-z0-9_]*)\s*:\s*)?([a-z_][a-z0-9_]*)\s*\((.*)\)$/is);
     if (m) {
-      const rel = m[1];
-      const inner = m[2].trim() || "*";
+      const outName = m[1] || m[2];
+      const rel = m[2];
+      const inner = m[3].trim() || "*";
       assertTable(s, rel);
       const relAlias = `${alias}_${rel}`;
       const innerList = buildSelectList(s, rel, relAlias, inner);
@@ -134,11 +135,11 @@ function buildSelectList(s: SchemaCache, table: string, alias: string, columns: 
       const oneToMany = s.fks.find((f) => f.fromTable === rel && f.toTable === table);
       if (manyToOne) {
         sql.push(
-          `(SELECT to_jsonb(${relAlias}_r) FROM (SELECT ${innerList} FROM public.${q(rel)} ${relAlias} WHERE ${relAlias}.${q(manyToOne.toCol)} = ${alias}.${q(manyToOne.fromCol)}) ${relAlias}_r) AS ${q(rel)}`,
+          `(SELECT to_jsonb(${relAlias}_r) FROM (SELECT ${innerList} FROM public.${q(rel)} ${relAlias} WHERE ${relAlias}.${q(manyToOne.toCol)} = ${alias}.${q(manyToOne.fromCol)}) ${relAlias}_r) AS ${q(outName)}`,
         );
       } else if (oneToMany) {
         sql.push(
-          `(SELECT coalesce(jsonb_agg(to_jsonb(${relAlias}_r)), '[]'::jsonb) FROM (SELECT ${innerList} FROM public.${q(rel)} ${relAlias} WHERE ${relAlias}.${q(oneToMany.fromCol)} = ${alias}.${q(oneToMany.toCol)}) ${relAlias}_r) AS ${q(rel)}`,
+          `(SELECT coalesce(jsonb_agg(to_jsonb(${relAlias}_r)), '[]'::jsonb) FROM (SELECT ${innerList} FROM public.${q(rel)} ${relAlias} WHERE ${relAlias}.${q(oneToMany.fromCol)} = ${alias}.${q(oneToMany.toCol)}) ${relAlias}_r) AS ${q(outName)}`,
         );
       } else {
         throw new QueryError(`No relationship between ${table} and ${rel}`, "PGRST200");
@@ -146,6 +147,12 @@ function buildSelectList(s: SchemaCache, table: string, alias: string, columns: 
       continue;
     }
     if (part === "*") { sql.push(`${alias}.*`); continue; }
+    const aliased = part.match(/^([a-z_][a-z0-9_]*)\s*:\s*([a-z_][a-z0-9_]*)$/i);
+    if (aliased) {
+      assertColumn(s, table, aliased[2]);
+      sql.push(`${alias}.${q(aliased[2])} AS ${q(aliased[1])}`);
+      continue;
+    }
     assertColumn(s, table, part);
     sql.push(`${alias}.${q(part)}`);
   }
@@ -214,10 +221,13 @@ export function buildSql(s: SchemaCache, spec: QuerySpec): { text: string; param
     return { text, params };
   }
 
-  // RETURNING supports plain columns only (no embeds), which is all the app uses after writes.
-  const plainReturning = spec.returning != null
-    ? ` RETURNING ${splitTop(spec.returning || "*").map((c) => { if (c === "*") return "*"; assertColumn(s, table, c); return q(c); }).join(", ")}`
-    : "";
+  // Writes return rows through a CTE, so the returned columns can use the same
+  // select syntax (including embeds) as reads: WITH w AS (... RETURNING *) SELECT ... FROM w
+  const plainReturning = spec.returning != null ? " RETURNING *" : "";
+  const wrapReturning = (sql: string) =>
+    spec.returning != null
+      ? `WITH w AS (${sql}) SELECT ${buildSelectList(s, table, alias, spec.returning || "*")} FROM w ${alias}`
+      : sql;
 
   if (spec.action === "insert" || spec.action === "upsert") {
     const rows = Array.isArray(spec.values) ? spec.values : [spec.values || {}];
@@ -236,7 +246,7 @@ export function buildSql(s: SchemaCache, spec: QuerySpec): { text: string; param
       const updates = cols.filter((c) => !conflict.includes(c));
       text += ` ON CONFLICT (${conflict.map(q).join(", ")}) ` + (updates.length ? `DO UPDATE SET ${updates.map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(", ")}` : "DO NOTHING");
     }
-    return { text: text + plainReturning, params };
+    return { text: wrapReturning(text + plainReturning), params };
   }
 
   if (spec.action === "update") {
@@ -246,13 +256,13 @@ export function buildSql(s: SchemaCache, spec: QuerySpec): { text: string; param
     if (!spec.filters?.length) throw new QueryError("UPDATE requires a filter");
     const set = cols.map((c) => { assertColumn(s, table, c); params.push(normaliseValue(s, table, c, values[c])); return `${q(c)} = $${params.length}`; }).join(", ");
     const where = buildWhere(s, table, `public.${q(table)}`, spec.filters, params);
-    return { text: `UPDATE public.${q(table)} SET ${set}${where}${plainReturning}`, params };
+    return { text: wrapReturning(`UPDATE public.${q(table)} SET ${set}${where}${plainReturning}`), params };
   }
 
   if (spec.action === "delete") {
     if (!spec.filters?.length) throw new QueryError("DELETE requires a filter");
     const where = buildWhere(s, table, `public.${q(table)}`, spec.filters, params);
-    return { text: `DELETE FROM public.${q(table)}${where}${plainReturning}`, params };
+    return { text: wrapReturning(`DELETE FROM public.${q(table)}${where}${plainReturning}`), params };
   }
   throw new QueryError(`Unknown action ${spec.action}`);
 }

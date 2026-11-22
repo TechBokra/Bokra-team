@@ -72,7 +72,7 @@ const safeKey = (k: string) => {
 export function registerBokraRoutes(app: express.Express) {
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: Number(process.env.LOGIN_RATE_LIMIT || 10),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: { message: "محاولات دخول كثيرة. حاول مرة أخرى بعد قليل.", code: "429" } },
@@ -246,4 +246,24 @@ export function registerBokraRoutes(app: express.Express) {
       res.status(500).json({ data: null, error: { message: e?.message || "Remove failed" } });
     }
   });
+}
+
+/** Can this user manage the given project (task groups etc.)? Admins, manage_projects, the project creator, or a project Manager. */
+export async function canManageProject(authHeader: string | undefined, projectId: string | null | undefined): Promise<boolean> {
+  const claims = authHeader ? verifyJwt(authHeader.replace(/^Bearer\s+/i, "")) : null;
+  if (!claims || !projectId) return false;
+  return withUser(claims, async (c) => {
+    const r = await c.query(
+      `SELECT public.is_admin() OR public.has_permission('manage_projects') OR EXISTS (
+         SELECT 1 FROM public.projects p
+         WHERE p.id = $1 AND (
+           p.creator_id = public.get_current_team_member_id()
+           OR EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(p.members, '[]'::jsonb)) m
+                      WHERE (m->>'team_member_id')::int = public.get_current_team_member_id()
+                        AND m->>'project_role' = 'Manager'))
+       ) AS ok`,
+      [projectId],
+    );
+    return !!r.rows[0]?.ok;
+  }).catch(() => false);
 }

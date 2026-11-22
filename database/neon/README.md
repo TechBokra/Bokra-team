@@ -8,6 +8,7 @@
 | `000_auth_compat.sql` | الإضافات (`uuid-ossp`, `pgcrypto`)، الأدوار `anon` و `authenticated`، جدول `auth.users` بسيط، والدوال `auth.uid()` / `auth.jwt()` / `auth.role()` |
 | `001_base_schema.sql` | الـ schema الكامل لـ `public`: 27 جدول، 118 سياسة RLS، 10 دوال |
 | `002_grants_and_auth_triggers.sql` | صلاحيات الدور `authenticated` + الـ triggers اللي بتربط أي مستخدم جديد بـ `team_members` |
+| `003_approvals_and_fixes.sql` | الموافقات حسب الصلاحية والتسلسل الإداري، صاحب الطلب يعدّل وهو معلّق بس، الجزاءات والتظلّم، الإشعارات لصاحبها بس |
 
 ## التطبيق
 
@@ -45,3 +46,7 @@ SELECT set_config('request.jwt.claims',
 
 `database/migrations/_legacy_supabase/` فيها migrations التعديلات القديمة بتاعة Supabase.
 كلها متضمنة بالفعل في `001_base_schema.sql`، ومحفوظة للمرجع بس.
+
+## اختبار شامل
+
+`npm run test:e2e` بيشغّل أكتر من 170 فحص (دخول، قراءة/كتابة كل جدول، موافقات، جزاءات، دعوات) بأربع أدوار على سيرفر شغال. محتاج نسخة قاعدة فيها باسورد موحد للمستخدمين التجريبيين (`PASSWORD`).
