@@ -13,3 +13,27 @@
 ## بدء الاستخدام
 
 هذا المشروع مُعد للنشر مباشرة عبر Vercel عند ربطه بحساب GitHub.
+
+## التشغيل (Neon)
+
+الباك إند بقى على **Neon** بدل Supabase:
+
+- **قاعدة البيانات:** Postgres على Neon. الـ schema في `database/neon/` (اقرا `database/neon/README.md`).
+- **تسجيل الدخول:** السيرفر بيتحقق من الباسورد جوه قاعدة البيانات ويدي توكن موقّع بـ `JWT_SECRET`.
+- **الصلاحيات:** كل الاستعلامات بتعدي على السيرفر (`/api/db`) وبتتنفذ بصلاحيات المستخدم، فسياسات RLS هي اللي بتحدد كل واحد يشوف إيه.
+- **الملفات:** Neon Object Storage (bucket اسمه `bokra`).
+
+### متغيرات البيئة
+
+انسخ `.env.example` لـ `.env` واملا القيم. نفس المتغيرات تتحط في Vercel → Settings → Environment Variables.
+
+### تشغيل محلي
+
+```bash
+npm install
+npm run dev        # http://localhost:3000
+```
+
+### النشر على Vercel
+
+الواجهة بتتبني بـ `vite build`، و`api/index.ts` بيشغّل سيرفر Express كـ serverless function لكل طلبات `/api/*`.

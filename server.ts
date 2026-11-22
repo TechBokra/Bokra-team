@@ -1,27 +1,30 @@
 import express from "express";
 import path from "path";
 import rateLimit from "express-rate-limit";
-import { createServer as createViteServer } from "vite";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "./server/compat";
+import { registerBokraRoutes } from "./server/routes";
 import dotenv from "dotenv";
 import { z } from "zod";
 
 dotenv.config();
 
-async function startServer() {
+export async function buildApp(mode: "node" | "serverless" = "node") {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "2mb" }));
+
+  // Neon-backed auth / data / storage routes (replace Supabase)
+  registerBokraRoutes(app);
 
   // Trust reverse proxy (Cloud Run / Nginx / Load Balancer) to get real client IP
   app.set("trust proxy", 1);
 
-  // Keep-alive endpoint to prevent Supabase from pausing (No Rate Limiting)
+  // Lightweight health check (No Rate Limiting)
   app.get("/api/keep-alive", async (req, res) => {
     try {
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ status: "config_missing" });
@@ -158,8 +161,8 @@ async function startServer() {
 
   const logAudit = async (entry: AuditLogEntry) => {
     try {
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) return;
 
       const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
@@ -195,8 +198,8 @@ async function startServer() {
       }
 
       const token = authHeader.replace("Bearer ", "");
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         res.status(500).json({ error: "Missing config" });
@@ -237,8 +240,8 @@ async function startServer() {
         return;
       }
 
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         res.status(500).json({ error: "Missing config" });
@@ -284,11 +287,11 @@ async function startServer() {
 
   // Helper to create a Supabase client bound to the requesting user's security context (enforces RLS)
   const getUserClient = (req: express.Request) => {
-    const supabaseUrl = process.env.VITE_SUPABASE_URL;
-    const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.DATABASE_URL;
+    const anonKey = process.env.JWT_SECRET;
 
     if (!supabaseUrl || !anonKey) {
-      throw new Error("Missing Supabase URL or Anon Key in environment");
+      throw new Error("Missing DATABASE_URL or JWT_SECRET in environment");
     }
 
     const authHeader = req.headers.authorization;
@@ -311,13 +314,13 @@ async function startServer() {
         return res.status(400).json({ error: (validation as any).error });
       }
       const { memberId, updates } = validation.data;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({
           error:
-            "Missing SUPABASE_SERVICE_ROLE_KEY. الرجاء إضافة المفتاح في إعدادات البيئة (Environment Variables) لتمكين هذه الخاصية.",
+            "Missing DATABASE_URL or JWT_SECRET. الرجاء إضافة المفتاح في إعدادات البيئة (Environment Variables) لتمكين هذه الخاصية.",
         });
       }
 
@@ -507,8 +510,8 @@ async function startServer() {
   app.post("/api/admin/site-settings/upsert", verifyToken, verifyAdmin, async (req, res) => {
     try {
       const { payload } = req.body;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
@@ -536,8 +539,8 @@ async function startServer() {
   app.post("/api/team/admin-update-role", verifyToken, verifyAdmin, async (req, res) => {
     try {
       const { roleId, updates } = req.body;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
@@ -580,12 +583,12 @@ async function startServer() {
         return res.status(400).json({ error: (validation as any).error });
       }
       const { email, password, ...restOfData } = validation.data;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({
-          error: "Missing SUPABASE_SERVICE_ROLE_KEY.",
+          error: "Missing DATABASE_URL or JWT_SECRET.",
         });
       }
 
@@ -677,8 +680,8 @@ async function startServer() {
 
   app.post("/api/admin/run-sql", verifyToken, verifyAdmin, async (req, res) => {
     try {
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
@@ -700,8 +703,8 @@ async function startServer() {
 
   app.get("/api/admin/team_members", verifyToken, verifyAdmin, async (req, res) => {
     try {
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
       }
@@ -721,8 +724,8 @@ async function startServer() {
   app.get("/api/admin/projects", verifyToken, async (req, res) => {
     try {
       const user = (req as any).user;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
       }
@@ -782,8 +785,8 @@ async function startServer() {
   app.get("/api/admin/tasks", verifyToken, async (req, res) => {
     try {
       const user = (req as any).user;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
       }
@@ -858,8 +861,8 @@ async function startServer() {
   app.get("/api/admin/daily_logs", verifyToken, async (req, res) => {
     try {
       const user = (req as any).user;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
       }
@@ -914,8 +917,8 @@ async function startServer() {
   app.get("/api/admin/task_comments", verifyToken, async (req, res) => {
     try {
       const user = (req as any).user;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
       }
@@ -1001,8 +1004,8 @@ async function startServer() {
   app.get("/api/admin/task_attachments", verifyToken, async (req, res) => {
     try {
       const user = (req as any).user;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
       }
@@ -1095,8 +1098,8 @@ async function startServer() {
         return res.status(400).json({ error: "رابط الدعوة غير صالح أو مفقود" });
       }
 
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
@@ -1141,8 +1144,8 @@ async function startServer() {
       }
       const { token, name, password } = validation.data;
 
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
@@ -1239,8 +1242,8 @@ async function startServer() {
       }
       const { email, roleId } = validation.data;
 
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
@@ -1314,8 +1317,8 @@ async function startServer() {
   app.delete("/api/admin/invites/:id", verifyToken, verifyAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
 
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
@@ -1360,8 +1363,8 @@ async function startServer() {
   // Proxy endpoint for creating notifications to bypass RLS restrictions
   app.post("/api/notifications", verifyToken, async (req, res) => {
     try {
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) {
         return res.status(500).json({ error: "Missing config" });
       }
@@ -1585,8 +1588,8 @@ async function startServer() {
   app.post("/api/task_groups", verifyToken, async (req, res) => {
     try {
       const { projectId, name, description } = req.body;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });
       const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
       const { data, error } = await supabaseAdmin.from("task_groups").insert([{ project_id: projectId, name, description }]).select().single();
@@ -1601,8 +1604,8 @@ async function startServer() {
     try {
       const { id } = req.params;
       const { name, description } = req.body;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });
       const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
       const { data, error } = await supabaseAdmin.from("task_groups").update({ name, description }).eq("id", id).select().single();
@@ -1616,8 +1619,8 @@ async function startServer() {
   app.delete("/api/task_groups/:id", verifyToken, async (req, res) => {
     try {
       const { id } = req.params;
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.DATABASE_URL;
+      const serviceRoleKey = process.env.JWT_SECRET;
       if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: "Missing config" });
       const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
       const { error } = await supabaseAdmin.from("task_groups").delete().eq("id", id);
@@ -1628,8 +1631,11 @@ async function startServer() {
     }
   });
 
+  if (mode === "serverless") return app;
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -1638,7 +1644,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("/*splat", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
@@ -1646,6 +1652,9 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+  return app;
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  buildApp("node");
+}

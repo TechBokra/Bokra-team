@@ -90,7 +90,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   handleLogout: async () => {
     const supabaseClient = getSupabaseClient();
     set({ currentUser: null });
-    window.localStorage.removeItem("supabase.auth.bokra.v2");
+    window.localStorage.removeItem("bokra.session.v1");
 
     if (supabaseClient) {
       try {

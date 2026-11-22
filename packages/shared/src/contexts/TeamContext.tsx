@@ -14,7 +14,6 @@ import { useToast } from "./ToastContext";
 import * as api from "../services/apiService";
 import { useRealtime } from "./RealtimeContext";
 import {
-  createClient,
   RealtimePostgresChangesPayload,
 } from "@supabase/supabase-js";
 

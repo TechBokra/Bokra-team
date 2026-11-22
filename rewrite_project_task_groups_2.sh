@@ -1,7 +1,0 @@
-sed -i 's/const { supabaseClient } = useSupabase();/const { supabaseClient, session } = useSupabase();/g' components/project/ProjectTaskGroups.tsx
-
-sed -i 's/const res = await fetch(\`\/api\/task_groups\/\${editingId}\`, { method: "PUT", headers: { "Content-Type": "application\/json" }/const res = await fetch(\`\/api\/task_groups\/\${editingId}\`, { method: "PUT", headers: { "Content-Type": "application\/json", "Authorization": \`Bearer \${session?.access_token || ""}\` }/g' components/project/ProjectTaskGroups.tsx
-
-sed -i 's/const res = await fetch(\"\/api\/task_groups\", { method: "POST", headers: { "Content-Type": "application\/json" }/const res = await fetch(\"\/api\/task_groups\", { method: "POST", headers: { "Content-Type": "application\/json", "Authorization": \`Bearer \${session?.access_token || ""}\` }/g' components/project/ProjectTaskGroups.tsx
-
-sed -i 's/const res = await fetch(\`\/api\/task_groups\/\${id}\`, { method: "DELETE" });/const res = await fetch(\`\/api\/task_groups\/\${id}\`, { method: "DELETE", headers: { "Authorization": \`Bearer \${session?.access_token || ""}\` } });/g' components/project/ProjectTaskGroups.tsx
