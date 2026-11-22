@@ -3,7 +3,7 @@
 // parameterised SQL. Identifiers are validated against the live schema, values
 // are always bound as parameters.
 import pg from "pg";
-import type { JwtClaims } from "./jwt";
+import type { JwtClaims } from "./jwt.js";
 
 const { Pool, types } = pg;
 
@@ -24,7 +24,7 @@ export const getPool = () => {
   return pool;
 };
 
-import type { QuerySpec, DbError, DbResult } from "../packages/shared/src/lib/queryBuilder";
+import type { QuerySpec, DbError, DbResult } from "../packages/shared/src/lib/queryBuilder.js";
 export type { QuerySpec, DbError, DbResult };
 
 // ---------------------------------------------------------------------------

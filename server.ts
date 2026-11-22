@@ -1,8 +1,8 @@
 import express from "express";
 import path from "path";
 import rateLimit from "express-rate-limit";
-import { createClient } from "./server/compat";
-import { registerBokraRoutes } from "./server/routes";
+import { createClient } from "./server/compat.js";
+import { registerBokraRoutes } from "./server/routes.js";
 import dotenv from "dotenv";
 import { z } from "zod";
 

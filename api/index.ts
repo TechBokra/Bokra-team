@@ -1,5 +1,5 @@
 // Vercel serverless entry: every /api/* request is handled by the Express app.
-import { buildApp } from "../server";
+import { buildApp } from "../server.js";
 
 const appPromise = buildApp("serverless");
 

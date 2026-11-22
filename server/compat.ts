@@ -1,9 +1,9 @@
 // Drop-in replacement for the parts of `@supabase/supabase-js` that server.ts uses,
 // backed by Neon Postgres. Admin clients bypass RLS (like the old service-role key);
 // clients created with a user's Authorization header run under RLS as that user.
-import { QueryBuilder } from "../packages/shared/src/lib/queryBuilder";
-import { getPool, runAsAdmin, runAsUser, rpcAsUser } from "./db";
-import { verifyJwt, type JwtClaims } from "./jwt";
+import { QueryBuilder } from "../packages/shared/src/lib/queryBuilder.js";
+import { getPool, runAsAdmin, runAsUser, rpcAsUser } from "./db.js";
+import { verifyJwt, type JwtClaims } from "./jwt.js";
 
 type AuthUser = { id: string; email: string; user_metadata?: Record<string, unknown> };
 

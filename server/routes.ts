@@ -3,9 +3,9 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { getPool, runAsUser, rpcAsUser, withUser } from "./db";
-import type { QuerySpec } from "../packages/shared/src/lib/queryBuilder";
-import { signJwt, verifyJwt, type JwtClaims } from "./jwt";
+import { getPool, runAsAdmin, runAsUser, rpcAsUser, withUser } from "./db.js";
+import type { QuerySpec } from "../packages/shared/src/lib/queryBuilder.js";
+import { signJwt, verifyJwt, type JwtClaims } from "./jwt.js";
 
 const bearer = (req: express.Request): JwtClaims | null => {
   const h = req.headers.authorization;
@@ -101,6 +101,17 @@ export function registerBokraRoutes(app: express.Express) {
   });
 
   // ---- Data (RLS enforced) --------------------------------------------------
+  // Before login the app only needs the public branding from site_settings.
+  const PUBLIC_SETTINGS = "id, app_name, logo_url, theme_color, currency, login_title, login_subtitle, support_email, is_finance_module_enabled, is_meetings_module_enabled, is_analytics_module_enabled, is_reports_module_enabled";
+  app.post("/api/db", dataLimiter, async (req, res, next) => {
+    const spec = req.body as QuerySpec;
+    if (!bearer(req) && spec?.table === "site_settings" && spec.action === "select") {
+      const result = await runAsAdmin({ table: "site_settings", action: "select", columns: PUBLIC_SETTINGS, single: spec.single ?? null });
+      return res.json(result);
+    }
+    next();
+  });
+
   app.post("/api/db", dataLimiter, requireUser, async (req, res) => {
     const claims = (req as any).claims as JwtClaims;
     const spec = req.body as QuerySpec;
