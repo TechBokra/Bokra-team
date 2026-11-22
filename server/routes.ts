@@ -1,7 +1,7 @@
 // Auth, data and file routes that replace Supabase Auth, PostgREST and Storage.
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getPool, runAsAdmin, runAsUser, rpcAsUser, withUser } from "./db.js";
 import type { QuerySpec } from "../packages/shared/src/lib/queryBuilder.js";
@@ -164,9 +164,26 @@ export function registerBokraRoutes(app: express.Express) {
       try {
         const key = safeKey(String(req.query.path || ""));
         const contentType = String(req.query.contentType || req.headers["content-type"] || "application/octet-stream");
-        await getS3().send(
-          new PutObjectCommand({ Bucket: BUCKET(), Key: key, Body: req.body as Buffer, ContentType: contentType }),
+        // On Vercel the platform may already have read the body; accept Buffer / string forms.
+        const raw = req.body as unknown;
+        const body = Buffer.isBuffer(raw) ? raw : typeof raw === "string" ? Buffer.from(raw, "binary") : null;
+        if (!body || body.length === 0) {
+          return res.status(400).json({ data: null, error: { message: "الملف وصل فاضي للسيرفر" } });
+        }
+        // Upload through a presigned URL (UNSIGNED-PAYLOAD, only host + content-type signed):
+        // the same signing path that works for downloads, and immune to body/checksum quirks.
+        const url = await getSignedUrl(
+          getS3(),
+          new PutObjectCommand({ Bucket: BUCKET(), Key: key, ContentType: contentType }),
+          { expiresIn: 300 },
         );
+        const put = await fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body });
+        if (!put.ok) {
+          const text = await put.text();
+          const code = text.match(/<Code>([^<]+)<\/Code>/)?.[1] || String(put.status);
+          console.error("upload rejected:", put.status, code, "bytes:", body.length, "keyId:", (env("NEON_STORAGE_ACCESS_KEY_ID") || "").slice(0, 14));
+          return res.status(502).json({ data: null, error: { message: `Storage rejected the upload (${code})` } });
+        }
         res.json({ data: { path: key }, error: null });
       } catch (e: any) {
         console.error("upload error:", e?.name, e?.message, "keyId:", (env("NEON_STORAGE_ACCESS_KEY_ID") || "").slice(0, 14));
@@ -174,6 +191,28 @@ export function registerBokraRoutes(app: express.Express) {
       }
     },
   );
+
+  // Quick config check (no secrets): open /api/storage/health in the browser.
+  app.get("/api/storage/health", async (_req, res) => {
+    const keyId = env("NEON_STORAGE_ACCESS_KEY_ID") || "";
+    const info: Record<string, unknown> = {
+      endpoint: env("NEON_STORAGE_ENDPOINT") || null,
+      region: env("NEON_STORAGE_REGION") || null,
+      bucket: BUCKET(),
+      keyIdPrefix: keyId.slice(0, 14) || null,
+      secretLength: (env("NEON_STORAGE_SECRET_ACCESS_KEY") || "").length,
+    };
+    try {
+      const url = await getSignedUrl(getS3(), new ListObjectsV2Command({ Bucket: BUCKET(), MaxKeys: 1 }), { expiresIn: 60 });
+      const r = await fetch(url);
+      const text = await r.text();
+      info.listStatus = r.status;
+      info.listCode = r.ok ? "OK" : text.match(/<Code>([^<]+)<\/Code>/)?.[1] || null;
+    } catch (e: any) {
+      info.error = e?.message;
+    }
+    res.json(info);
+  });
 
   // Files are served through short-lived signed URLs so <img src> keeps working.
   app.get("/api/storage/object/*key", async (req, res) => {
