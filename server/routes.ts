@@ -33,6 +33,12 @@ const env = (name: string) => {
   const v = process.env[name];
   return v ? v.trim().replace(/^["']|["']$/g, "").trim() : undefined;
 };
+// Region must look like "eu-central-1"; otherwise take it from the endpoint host.
+const storageRegion = (endpoint: string) => {
+  const r = env("NEON_STORAGE_REGION");
+  if (r && /^[a-z]{2}-[a-z]+-\d$/.test(r)) return r;
+  return endpoint.match(/\.([a-z]{2}-[a-z]+-\d)\.aws\.neon\.tech/)?.[1] || "eu-central-1";
+};
 const getS3 = () => {
   if (!s3) {
     // Not AWS_*: Vercel reserves those names for its own runtime credentials,
@@ -44,7 +50,7 @@ const getS3 = () => {
       throw new Error("Object storage is not configured (NEON_STORAGE_ENDPOINT / NEON_STORAGE_ACCESS_KEY_ID / NEON_STORAGE_SECRET_ACCESS_KEY)");
     }
     s3 = new S3Client({
-      region: env("NEON_STORAGE_REGION") || "eu-central-1",
+      region: storageRegion(endpoint),
       endpoint,
       credentials: { accessKeyId, secretAccessKey },
       forcePathStyle: true,
@@ -197,7 +203,7 @@ export function registerBokraRoutes(app: express.Express) {
     const keyId = env("NEON_STORAGE_ACCESS_KEY_ID") || "";
     const info: Record<string, unknown> = {
       endpoint: env("NEON_STORAGE_ENDPOINT") || null,
-      region: env("NEON_STORAGE_REGION") || null,
+      region: env("NEON_STORAGE_ENDPOINT") ? storageRegion(env("NEON_STORAGE_ENDPOINT")!) : null,
       bucket: BUCKET(),
       keyIdPrefix: keyId.slice(0, 14) || null,
       secretLength: (env("NEON_STORAGE_SECRET_ACCESS_KEY") || "").length,
