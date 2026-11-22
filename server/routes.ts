@@ -27,22 +27,34 @@ const requireUser: express.RequestHandler = (req, res, next) => {
 // Object storage (Neon, S3-compatible)
 // ---------------------------------------------------------------------------
 let s3: S3Client | null = null;
+// Env values pasted into dashboards often carry stray spaces, newlines or quotes,
+// which silently break the S3 signature.
+const env = (name: string) => {
+  const v = process.env[name];
+  return v ? v.trim().replace(/^["']|["']$/g, "").trim() : undefined;
+};
 const getS3 = () => {
   if (!s3) {
-    const { AWS_ENDPOINT_URL_S3, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION } = process.env;
-    if (!AWS_ENDPOINT_URL_S3 || !AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+    const endpoint = env("AWS_ENDPOINT_URL_S3");
+    const accessKeyId = env("AWS_ACCESS_KEY_ID");
+    const secretAccessKey = env("AWS_SECRET_ACCESS_KEY");
+    if (!endpoint || !accessKeyId || !secretAccessKey) {
       throw new Error("Object storage is not configured (AWS_ENDPOINT_URL_S3 / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)");
     }
     s3 = new S3Client({
-      region: AWS_REGION || "us-east-1",
-      endpoint: AWS_ENDPOINT_URL_S3,
-      credentials: { accessKeyId: AWS_ACCESS_KEY_ID, secretAccessKey: AWS_SECRET_ACCESS_KEY },
+      region: env("AWS_REGION") || "us-east-1",
+      endpoint,
+      credentials: { accessKeyId, secretAccessKey },
       forcePathStyle: true,
+      // Only send checksums when an operation requires them; the newer SDK default
+      // (streaming CRC32 trailers) is not accepted by every S3-compatible service.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
   }
   return s3;
 };
-const BUCKET = () => process.env.STORAGE_BUCKET || "bokra";
+const BUCKET = () => env("STORAGE_BUCKET") || "bokra";
 const safeKey = (k: string) => {
   const key = k.replace(/^\/+/, "");
   if (!key || key.includes("..") || key.length > 512) throw new Error("Invalid file path");
