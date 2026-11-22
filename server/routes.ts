@@ -35,14 +35,16 @@ const env = (name: string) => {
 };
 const getS3 = () => {
   if (!s3) {
-    const endpoint = env("AWS_ENDPOINT_URL_S3");
-    const accessKeyId = env("AWS_ACCESS_KEY_ID");
-    const secretAccessKey = env("AWS_SECRET_ACCESS_KEY");
+    // Vercel reserves AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION for its own
+    // runtime, so on Vercel the NEON_STORAGE_* names must be used. AWS_* still work locally.
+    const endpoint = env("NEON_STORAGE_ENDPOINT") || env("AWS_ENDPOINT_URL_S3");
+    const accessKeyId = env("NEON_STORAGE_ACCESS_KEY_ID") || env("AWS_ACCESS_KEY_ID");
+    const secretAccessKey = env("NEON_STORAGE_SECRET_ACCESS_KEY") || env("AWS_SECRET_ACCESS_KEY");
     if (!endpoint || !accessKeyId || !secretAccessKey) {
-      throw new Error("Object storage is not configured (AWS_ENDPOINT_URL_S3 / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)");
+      throw new Error("Object storage is not configured (NEON_STORAGE_ENDPOINT / NEON_STORAGE_ACCESS_KEY_ID / NEON_STORAGE_SECRET_ACCESS_KEY)");
     }
     s3 = new S3Client({
-      region: env("AWS_REGION") || "us-east-1",
+      region: env("NEON_STORAGE_REGION") || "eu-central-1",
       endpoint,
       credentials: { accessKeyId, secretAccessKey },
       forcePathStyle: true,
